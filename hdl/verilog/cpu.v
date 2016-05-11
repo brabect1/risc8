@@ -78,9 +78,9 @@ reg		expwrite;
 // This should be set to the ROM location where our restart vector is.
 // As set here, we have 512 words of program space.
 //
-parameter RESET_VECTOR = 11'h7FF;
+parameter [10:0] RESET_VECTOR = 11'h7FF;
 
-parameter	INDF_ADDRESS	= 3'h0,
+parameter [2:0]	INDF_ADDRESS	= 3'h0,
 		TMR0_ADDRESS	= 3'h1,
 		PCL_ADDRESS	= 3'h2,
 		STATUS_ADDRESS	= 3'h3,
@@ -235,6 +235,37 @@ parameter  [3:0] ALUOP_ROR  = 4'b0101;
 parameter  [3:0] ALUOP_ROL  = 4'b0110;
 parameter  [3:0] ALUOP_SWAP = 4'b0111;
 
+reg [1:0] phase_cnt;
+wire [1:0] phase_cnt_inc;
+wire [1:0] phase_cnt_next;
+
+reg q1;
+reg q4;
+
+parameter [1:0] PHASE_CNT_OVF = 2'b10;
+
+always @(posedge clk) begin
+    if (reset) begin
+        phase_cnt <= 2'b00;
+    end
+    else begin
+        phase_cnt <= phase_cnt_next;
+    end
+end
+
+assign phase_cnt_inc = phase_cnt + 2'b01;
+assign phase_cnt_next = phase_cnt_inc == PHASE_CNT_OVF ? 2'b00 : phase_cnt_inc;
+
+always @(posedge clk) begin
+    if (reset) begin
+        q1 <= 1'b1;
+        q4 <= 1'b0;
+    end
+    else begin
+        q1 <= phase_cnt_inc == (PHASE_CNT_OVF        ) ? 1'b1 : 1'b0;
+        q4 <= phase_cnt_inc == (PHASE_CNT_OVF - 2'b01) ? 1'b1 : 1'b0;
+    end
+end
 
 // Instantiate each of our subcomponents
 //
@@ -341,15 +372,15 @@ end
 // Assert this when the general fwe (write enable to *any* register) is true AND Register File
 //    address range is specified.
 //  
-always @(regfilesel or fwe)
-   regfilewe = regfilesel & fwe;
+always @(regfilesel or fwe or q4)
+   regfilewe = q4 & regfilesel & fwe;
 
 // Read Enable (this if nothing else, helps in debug.)
 // Assert if Register File address range is specified AND the ALU is actually using some
 //    data off the SBUS.
 //   
-always @(regfilesel or aluasel or alubsel)
-   regfilere = regfilesel & ((aluasel == ALUASEL_SBUS) | (alubsel == ALUBSEL_SBUS));
+always @(regfilesel or aluasel or alubsel or q1)
+   regfilere = q1 & regfilesel & ((aluasel == ALUASEL_SBUS) | (alubsel == ALUBSEL_SBUS));
 
 // *********** Address Decodes **************
 //
@@ -399,11 +430,11 @@ always @(dbus)
 always @(fileaddr)
    expaddr = fileaddr;
 
-always @(expsel or aluasel or alubsel)
-   expread = expsel & ((aluasel == ALUASEL_SBUS) | (alubsel == ALUBSEL_SBUS));
+always @(expsel or aluasel or alubsel or q1)
+   expread = q1 & expsel & ((aluasel == ALUASEL_SBUS) | (alubsel == ALUBSEL_SBUS));
 
-always @(expsel or fwe)
-   expwrite = expsel & fwe;
+always @(expsel or fwe or q4)
+   expwrite = q4 & expsel & fwe;
 
 
 //
@@ -469,10 +500,10 @@ always @(aluout)
 always @(dbus)
    regfilein = dbus;
    
-// Drive the ROM address bus straight from the PC_IN bus
+// Drive the ROM address bus straight from the PC bus
 //
-always @(pc_in)
-   paddr = pc_in;
+always @(pc)
+   paddr = pc;
 
 
 // Define sub-signals out of inst
@@ -512,7 +543,7 @@ always @(posedge clk) begin
    if (reset) begin
       inst <= 12'h000;
    end
-   else begin
+   else if (q4) begin
       if (skip == 1'b1) begin
          inst <= 12'b000000000000; // FORCE NOP
       end
@@ -580,7 +611,7 @@ always @(posedge clk) begin
    if (reset) begin
       w <= 8'h00;
    end
-   else begin
+   else if (q4) begin
       if (wwe) begin
          w <= dbus;
       end
@@ -602,7 +633,7 @@ always @(posedge clk) begin
    if (reset) begin
       tmr0 <= 8'h00;
    end
-   else begin
+   else if (q4) begin
       // See if the status register is actually being written to
       if (fwe & specialsel & (fileaddr[2:0] == TMR0_ADDRESS)) begin
          // Yes, so just update the register from the dbus
@@ -638,7 +669,7 @@ always @(posedge clk) begin
    if (reset) begin
       prescaler <= 8'h00;
    end
-   else begin
+   else if (q4) begin
       if (~option[5]) begin
          prescaler <= prescaler + 1;
       end
@@ -652,13 +683,13 @@ end
 
 // STATUS Register (Register #3)
 //
-parameter STATUS_RESET_VALUE = 8'h18;
+parameter [7:0] STATUS_RESET_VALUE = 8'h18;
 
 always @(posedge clk) begin
    if (reset) begin
       status <= STATUS_RESET_VALUE;
    end
-   else begin
+   else if (q4) begin
       // See if the status register is actually being written to
       if (fwe & specialsel & (fileaddr[2:0] == STATUS_ADDRESS)) begin
          // Yes, so just update the register from the dbus
@@ -692,7 +723,7 @@ always @(posedge clk) begin
    if (reset) begin
       fsr <= 8'h00;
    end
-   else begin
+   else if (q4) begin
       // See if the status register is actually being written to
       if (fwe & specialsel & (fileaddr[2:0] == FSR_ADDRESS)) begin
          fsr <= dbus;
@@ -704,12 +735,12 @@ end
 //
 // The special OPTION instruction should move W into the OPTION register.
 //
-parameter OPTION_RESET_VALUE = 8'h3F;
+parameter [7:0] OPTION_RESET_VALUE = 8'h3F;
 always @(posedge clk) begin
    if (reset) begin
       option <= OPTION_RESET_VALUE;
    end
-   else begin
+   else if (q4) begin
       if (isoption)
          option <= dbus;
    end   
@@ -721,14 +752,14 @@ end
 //
 always @(posedge clk)
    if (reset) porta <= 8'h00;
-   else       porta <= portain;
+   else if (q1) porta <= portain;
 
 // PORTB Output Port  (Register #6)
 always @(posedge clk) begin
    if (reset) begin
       portb <= 8'h00;
    end
-   else begin
+   else if (q4) begin
       if (fwe & specialsel & (fileaddr[2:0] == PORTB_ADDRESS) & ~istris) begin
          portb <= dbus;
       end
@@ -744,7 +775,7 @@ always @(posedge clk) begin
    if (reset) begin
       portc <= 8'h00;
    end
-   else begin
+   else if (q4) begin
       if (fwe & specialsel & (fileaddr[2:0] == PORTC_ADDRESS) & ~istris) begin
          portc <= dbus;
       end
@@ -760,7 +791,7 @@ always @(posedge clk) begin
    if (reset) begin
       trisa <= 8'hff; // Default is to tristate them
    end
-   else begin
+   else if (q4) begin
       if (fwe & specialsel & (fileaddr[2:0] == PORTA_ADDRESS) & istris) begin
          trisa <= dbus;
       end
@@ -771,7 +802,7 @@ always @(posedge clk) begin
    if (reset) begin
       trisb <= 8'hff; // Default is to tristate them
    end
-   else begin
+   else if (q4) begin
       if (fwe & specialsel & (fileaddr[2:0] == PORTB_ADDRESS) & istris) begin
          trisb <= dbus;
       end
@@ -782,7 +813,7 @@ always @(posedge clk) begin
    if (reset) begin
       trisc <= 8'hff; // Default is to tristate them
    end
-   else begin
+   else if (q4) begin
       if (fwe & specialsel & (fileaddr[2:0] == PORTC_ADDRESS) & istris) begin
          trisc <= dbus;
       end
@@ -812,7 +843,7 @@ end
 
 always @(posedge clk)
    if (reset) pc <= RESET_VECTOR;
-   else       pc <= pc_in;
+   else if (q4) pc <= pc_in;
 
 always @(inst or stacklevel or status or stack1 or stack2 or pc or dbus) begin
    casex ({inst, stacklevel}) // synopsys parallel_case
@@ -837,7 +868,7 @@ always @(posedge clk) begin
    if (reset) begin
       stack1 <= 9'h000;
    end
-   else begin
+   else if (q4) begin
       // CALL instruction
       if (inst[11:8] == 4'b1001) begin
          case (stacklevel) // synopsys parallel_case
@@ -878,7 +909,7 @@ always @(posedge clk) begin
    if (reset == 1'b1) begin
       stacklevel <= 2'b00;  // On reset, there should be no CALLs in progress
    end
-   else begin
+   else if (q4) begin
       casex ({inst, stacklevel}) // synopsys parallel_case
          // Call instructions
          14'b1001_????_????_00: stacklevel <= 2'b01;  // Record 1st CALL

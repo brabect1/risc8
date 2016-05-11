@@ -63,6 +63,7 @@ parameter XORLW	= 33;
 
 // *** Basic Interface to the PICCPU
 reg		clk;
+reg		clk2x;
 reg		reset;
 
 // Declare I/O Port connections
@@ -91,7 +92,7 @@ wire [7:0]	debugstatus;
  
 // Instantiate one CPU to be tested.
 cpu cpu (
-   .clk		(clk),
+   .clk		(clk2x),
    .reset	(reset),
    .paddr	(pramaddr),
    .pdata	(pramdata),
@@ -178,8 +179,16 @@ task drive_clock;
    begin
       clk  = 0;
       forever begin
-         #(CLKLO) clk = 1;
-         #(CLKHI) clk = 0;
+         #(CLKLO);
+         clk = 1;
+         clk2x = 1;
+         #(CLKHI)
+         clk2x = 0;
+         #(CLKLO);
+         clk = 0;
+         clk2x = 1;
+         #(CLKHI)
+         clk2x = 0;
       end
    end
 endtask

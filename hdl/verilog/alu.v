@@ -42,15 +42,15 @@ reg [7:0]	y;
 // Internal declarations
 reg		addercout; // Carry out straight from the adder itself.
  
-parameter ALUOP_ADD  = 4'b0000;
-parameter ALUOP_SUB  = 4'b1000;
-parameter ALUOP_AND  = 4'b0001;
-parameter ALUOP_OR   = 4'b0010;
-parameter ALUOP_XOR  = 4'b0011;
-parameter ALUOP_COM  = 4'b0100;
-parameter ALUOP_ROR  = 4'b0101;
-parameter ALUOP_ROL  = 4'b0110;
-parameter ALUOP_SWAP = 4'b0111;
+parameter [3:0] ALUOP_ADD  = 4'b0000;
+parameter [3:0] ALUOP_SUB  = 4'b1000;
+parameter [3:0] ALUOP_AND  = 4'b0001;
+parameter [3:0] ALUOP_OR   = 4'b0010;
+parameter [3:0] ALUOP_XOR  = 4'b0011;
+parameter [3:0] ALUOP_COM  = 4'b0100;
+parameter [3:0] ALUOP_ROR  = 4'b0101;
+parameter [3:0] ALUOP_ROL  = 4'b0110;
+parameter [3:0] ALUOP_SWAP = 4'b0111;
 
 
 always @(a or b or cin or op) begin

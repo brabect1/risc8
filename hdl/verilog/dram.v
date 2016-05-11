@@ -17,6 +17,7 @@ module dram (
    clk,
    address,
    we,
+   re,
    din,
    dout
 );
@@ -24,8 +25,10 @@ module dram (
 input		clk;
 input [6:0]	address;
 input		we;
+input		re;
 input [7:0]	din;
 output [7:0]	dout;
+reg [7:0]	dout;
 
 // Number of data memory words.  This is somewhat tricky, since remember
 // that lowest registers (e.g. special registers) are not really in this
@@ -71,8 +74,9 @@ reg [7:0]	mem[0:word_depth-1];
 // READ
 //assign dout = mem[address_latched];
 
-// ASYNCHRONOUS READ
-assign dout = mem[address];
+// SYNCHRONOUS READ
+always @(posedge clk)
+   if (re) dout <= mem[address];
 
 // SYNCHRONOUS WRITE
 always @(posedge clk)

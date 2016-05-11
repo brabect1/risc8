@@ -94,6 +94,7 @@ dram dram (
    .clk		(clk),
    .address	(final_address),
    .we		(we),
+   .re		(re),
    .din		(din),
    .dout	(dout)
 );
