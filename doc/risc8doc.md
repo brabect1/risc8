@@ -183,9 +183,10 @@ output is an example of what you should see:
 3 System Architecture
 ---------------------
 
-Click here to see the System Diagram for the RISC8 core
-[risc8.gif](risc8.gif). Module boundaries are bolded with the Verilog
-filename indicated.
+A block diagram of the RISC8 core is shown on the following figure.
+Module boundaries are bolded with the Verilog filename indicated.
+
+![RISC8 Block Diagram](risc8.gif)
 
 The RISC8 is a Harvard Architecture and is binary code compatible with
 the Microchip 16C57. Instructions are 12-bits wide and the data path is
@@ -822,27 +823,46 @@ wealth of existing development tools. Development is typically done both
 on the PC and on UNIX. Existing code development tools used to develop
 code for the 16C57 may be used for the RISC8. It is assumed that the
 development of working code should be done in one of the many
-high-quality assembler/debugger tools that are available from a number
-of 3^rd^-party vendors. Once an Intel HEX format binary file is
+C compiler/assembler/debugger tools that are available from a number
+of 3rd-party vendors, including open source.
+
+Once an Intel HEX format binary file is
 produced, it must be converted into a format acceptable to the Verilog
-\$readmemh format. The included C program, hex2v.c, can do this
+`$readmemh` format. The included C program, `verif/other/hex2v.c`, can do this
 conversion. The program is a simple command-line program that accepts
 the Intel HEX filename as an input argument. The output is the
-\$readmemh-compatible data and can be piped to a ".rom" file. The
-basic.rom and dds.rom files are included in the distribution files to
+`$readmemh`-compatible data and can be piped to a ".rom" file. The
+`basic.rom` and `dds.rom` files are included in the distribution files to
 enable immediate running of a simulation.
 
-After the .ROM file is made, the Verilog simulation can be run;
+After having the .rom file, the Verilog simulation can be run:
 
-verilog test.v cpu.v regs.v idec.v alu.v exp.v dram.v pram.v
+    verilog test.v cpu.v regs.v idec.v alu.v exp.v dram.v pram.v
 
-The testbench test.v provides some limited debugging capability. Several
-Verilog ‘monitor’ tasks are available that will display changing
-register values, etc. It is expected that a waveform viewer such as
-CWAVES or UNDERTOW will be used for detailed debugging.
+The testbench `test.v` provides some limited debugging capability. Several
+Verilog "monitor" tasks are available that will display changing
+register values, etc.
 
 C compilers may also be used just as 16C57-compatible Assemblers may be
 used as long as they can generate the required Intel HEX format output.
+
+Here is an example of using the open-source [gputils](http://gputils.sourceforge.net/)
+assembler:
+
+    # Install gputils (example for Ubuntu/Debian systems)
+    sudo apt-get install gputils
+    
+    # Assemble the symbolic code (.asm) into the binary code (.hex)
+    gpasm -o basic.hex basic.asm
+    
+    # If needed, compile the HEX to Verilog ROM converter
+    gcc -o hex2v hex2v.c
+    
+    # Create the Verilog ROM file
+    ./hex2v basic.hex > basic.rom
+
+An example how to use [SDCC](http://sdcc.sourceforge.net/) C compiler with PIC devices is [here](http://www.digitalpeer.com/blog/programming-a-pic-on-linux-tutorial).
+
 
 13 Expansion
 ------------
