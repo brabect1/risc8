@@ -1,15 +1,8 @@
-<!--
-Conberted by Pandoc (http://http://pandoc.org/) from the legacy HTML document.
--->
 
 RISC8 Core
 ==========
 
-Version 1.0
-
-Tom Coonan
-
-tcoonan@mindspring.com
+*Authorship: Original version of this document, large portions of which are still present, is attributable to Tom Coonan (tcoonan@mindspring.com).*
 
 Table of Contents:
 
@@ -29,7 +22,7 @@ Table of Contents:
 14. Test Programs
 15. Bugs
 
- 
+
 
 1 Introduction
 --------------
@@ -37,13 +30,37 @@ Table of Contents:
 The Free-RISC8 is a Verilog implementation of a simple 8-bit processor.
 The RISC8 is binary code compatible with the Microchip 16C57 processor.
 Code may be developed and debugged using tools available from a number
-of 3^rd^ Party tool developers. Programs existing for the 16C57 may be
+of 3rd party tool providers. Programs existing for the 16C57 may be
 ported to the RISC8 for use in an FPGA, etc.
 
-The design is synthesizable and has been used by various people in the
-past within ASICs as well as FPGAs. The package consists of the
-following Verilog and C files:
+The current version is a two-cycle core, meaning that all but branch instructions
+take two cycles. One cycle is spent on reading internal registers (*register read*)
+and the other cycle is spent on instruction execution (*execute*). Branch instructions
+take two instruction cycles (i.e. four clock cycles). If, for whatever reasons, extra
+pipelining were needed, it could be easily introduced.
 
+There is presently no pipelining at the instruction level, meaning there
+is no overlapping of the *register read* and *execute* phases of subsequent
+instructions. It is theoretically possible but would come at the price of higher
+complexity.
+
+The current design is synthesizable, but has not been used in any project yet.
+
+### History ###
+
+The legacy version by Tom Coonana was a single-cycle core. The lagcy code is still available
+under the *legacy* tag. The major limitation of the legacy architecture was the need of reading
+the register file asynchronously, which was due to the need to get instruction operands in the
+same cycle the instruction executed. Since the register file is relatively large (seventy 8-bit
+words), it would consume a moderate amount of logic and introduce fair combinational delay
+on the output multiplexing.
+
+A number of technologies (both FPGA and ASIC) might benefit from using a register file with
+a synchronous (i.e. registered) read by using an embedded synchronous RAM rather than building
+the register file from discrete flops. The extra cycle needed to get data out of a synchronous
+register file introduces the multi-cycle nature of the current core.
+
+<!--
     +--------------------------------------+--------------------------------------+
     | File                                 | Description                          |
     +--------------------------------------+--------------------------------------+
@@ -98,87 +115,60 @@ following Verilog and C files:
     +--------------------------------------+--------------------------------------+
     | risc8.pdf                            | This file.                           |
     +--------------------------------------+--------------------------------------+
+-->
 
- 
 
 2 Quick Start
 -------------
 
-Extract all the files from the supplied ZIP into a new directory. Once
-all the files have been extracted from the archive, invoke your Verilog
-simulator specifying all the Verilog files (the ‘runit’ script is what I
-happen to use). The "Basic Confidence" simulation is initially
-configured within the test.v testbench. This test verifies that the core
-is able to reset and run all the RISC8 instructions. The following
-output is an example of what you should see:
+Directory structure is shown on the following figure. The `hdl/verilog/` folder contains
+the RTL code of the RISC8 core. Verilog testbench resides in `verif/hdl/verilog/` and
+uses `.rom` files located in `verif/other/`.
 
-    >runit
-    
-    Host command: /tools/cadence99/tools/verilog/bin/verilog.exe
-    Command arguments:
-    test.v
-    cpu.v
-    alu.v
-    regs.v
-    idec.v
-    exp.v
-    dram.v
-    pram.v
-    VERILOG-XL 2.8.p001 log file created Dec 13, 1999 16:09:07
-    VERILOG-XL 2.8.p001 Dec 13, 1999 16:09:07
-    [... SNIP all the Verilog informative output ...]
-    Compiling source file "test.v"
-    Compiling source file "cpu.v"
-    Compiling source file "alu.v"
-    Compiling source file "regs.v"
-    Compiling source file "idec.v"
-    Compiling source file "exp.v"
-    Compiling source file "dram.v"
-    Compiling source file "pram.v"
-    Highest level modules:
-    
-    test
-    
-    Reading in SIN data for example DDS in EXP.V from sindata.hex
-    Free-RISC8. Version 1.0
-    Free-RISC8 1.0. This is the BASIC CONFIDENCE TEST.
-    Loading program memory with basic.rom
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 00
-    MONITOR_PORTC: Port C changes to: 00
-    MONITOR_PORTB: Port B changes to: 00
-    End RESET.
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 01
-    MONITOR_PORTB: Port B changes to: 01
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 02
-    MONITOR_PORTB: Port B changes to: 02
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 03
-    MONITOR_PORTB: Port B changes to: 03
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 04
-    MONITOR_PORTB: Port B changes to: 04
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 05
-    MONITOR_PORTB: Port B changes to: 05
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 06
-    MONITOR_PORTB: Port B changes to: 06
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 07
-    MONITOR_PORTB: Port B changes to: 07
-    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 08
-    MONITOR_PORTB: Port B changes to: 08
-    Done monitoring for output signature. 9 Matches, 0 Mismatches.
-    SUCCESS.
-    
-    End of simulation signalled. Killing simulation in a moment.
-    L232 "test.v": \$finish at simulation time 2641100
-    
-    ~~~~ {.c11}
-    0 simulation events (use +profile or +listcounts option to count)
-    ~~~~
-    
-    CPU time: 0.4 secs to compile + 0.1 secs to link + 1.7 secs in
-    simulation
-    
-    End of VERILOG-XL 2.8.p001 Dec 13, 1999 16:09:10
+    <root>
+     |
+     +-- hdl/verilog
+     |    |
+     |    +-- cpu.v    Top-level cpu module. Synthesizable.
+     |    +-- idec.v   Instruction Decoder. Synthesizable.
+     |    +-- alu.v    ALU. Synthesizable.
+     |    +-- regs.v   Register File interface. Synthesizable.
+     |    `-- dram.v   Memory model, Synchronous 72x8 RAM. Can be synthesizable if a simpler flip-flop memory is desired.
+     |
+     +-- verif/hdl/verilog
+     |    |
+     |    +-- test.v   Testbench. Includes the program ROM. NOT synthesizable.
+     |    +-- pram.v   Memory model, Synchronous 2048x12 RAM. Can be synthesizable if a simpler flip-flop memory is desired.
+     |    `-- exp.v    Example expansion module (a DDS for DDS demo).
+     |
+     `-- verif/other
+          |
+          +-- *.asm    Symbolic RISC8 assembly code.
+          +-- *.rom    Sample RISC8 binary code in Verilog $readmem format.
+          `-- ...      Other supporting files.
+          
+The use of the files is pretty straightforward and depends on choice of the Verilog
+simulator. Here we show an example use of the [Icarus Verilog](http://iverilog.icarus.com):
 
- 
+    # Create and enter the simulation folder
+    mkdir sim && cd sim
+    
+    # Compile the sources (RTL and testbench)
+    iverilog -o test -s test  ../hdl/verilog/*.v  ../verif/hdl/verilog/*.v
+    
+    # Create symlinks to the memory contents files
+    ln -s ../verif/other/sindata.hex sindata.hex
+    ln -s ../verif/other/basic.rom basic.rom
+    
+    # Run the simulation
+    ./test
+    
+    # To inspect signal waveforms using GTKwave
+    gtkwave -f risc8.vcd
+
+Here is the reference transcipt for that simulation:
+
+    ***TBD***
 
 3 System Architecture
 ---------------------
@@ -308,23 +298,6 @@ The hierarchy is as follows:
      +-- pram.v             Memory model, Synchronous 2048x12 RAM. Can be synthesizable if a simpler flip-flop memory is desired.
      `-- exp.v              Example expansion module (a DDS for DDS demo).
 
-<!-- Directory structure
-    <root>
-     |
-     +-- hdl/verilog
-     |    |
-     |    +-- cpu.v    Top-level cpu module. Synthesizable.
-     |    +-- idec.v   Instruction Decoder. Synthesizable.
-     |    +-- alu.v    ALU. Synthesizable.
-     |    +-- regs.v   Register File interface. Synthesizable.
-     |    `-- dram.v   Memory model, Synchronous 72x8 RAM. Can be synthesizable if a simpler flip-flop memory is desired.
-     |
-     `-- verif/hdl/verilog
-          |
-          +-- test.v   Testbench. Includes the program ROM. NOT synthesizable..
-          +-- pram.v   Memory model, Synchronous 2048x12 RAM. Can be synthesizable if a simpler flip-flop memory is desired.
-          `-- exp.v    Example expansion module (a DDS for DDS demo).
--->
 
 6 Synthesis
 -----------
