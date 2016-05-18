@@ -168,7 +168,34 @@ simulator. Here we show an example use of the [Icarus Verilog](http://iverilog.i
 
 Here is the reference transcipt for that simulation:
 
-    ***TBD***
+    Reading in SIN data for example DDS in EXP.V from sindata.hex
+    Free-RISC8.  Version 1.0
+    Free-RISC8 1.0.  This is the BASIC CONFIDENCE TEST.
+    Loading program memory with basic.rom
+    VCD info: dumpfile risc8.vcd opened for output.
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 00
+    MONITOR_PORTC: Port C changes to: 00
+    MONITOR_PORTB: Port B changes to: 00
+    End RESET.
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 01
+    MONITOR_PORTB: Port B changes to: 01
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 02
+    MONITOR_PORTB: Port B changes to: 02
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 03
+    MONITOR_PORTB: Port B changes to: 03
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 04
+    MONITOR_PORTB: Port B changes to: 04
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 05
+    MONITOR_PORTB: Port B changes to: 05
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 06
+    MONITOR_PORTB: Port B changes to: 06
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 07
+    MONITOR_PORTB: Port B changes to: 07
+    MONITOR_OUTPUT_SIGNATURE: Expected output observed on PORTB: 08
+    MONITOR_PORTB: Port B changes to: 08
+    Done monitoring for output signature.  9 Matches, 0 Mismatches.
+    SUCCESS.
+    End of simulation signalled.  Killing simulation in a moment.
 
 3 System Architecture
 ---------------------
@@ -178,40 +205,54 @@ Module boundaries are bolded with the Verilog filename indicated.
 
 ![RISC8 Block Diagram](risc8.gif)
 
+The core is synchronous with one clock and has one *synchronous* reset. It is scan-insertion friendly.
+
 The RISC8 is a Harvard Architecture and is binary code compatible with
-the Microchip 16C57. Instructions are 12-bits wide and the data path is
+the [Microchip](http://www.microchip.com/) 16C57. Instructions are 12-bits wide and the data path is
 8-bits wide. There are up to 72 data words and up to 2048 program words.
-It has an accumulator-based instruction set (33 instructions). The W
-register is the accumulator. The Program Counter (PC) and two Stack
-registers allow 2 levels of subroutines (this could be easily expanded).
-The RISC8 pipelines its Fetch and Execute. The Register File uses a
-banking scheme and an Indirect Addressing mode. The core’s Register File
-is implemented as a flip-flop based Register File. The Program memory
-(PRAM) is a separate memory from the Register File and is outside the
-core. The PRAM is currently a simple Verilog memory array residing in
-test.v. The core is synchronous with one clock and has one synchronous
-reset. It is scan-insertion friendly.
+It has an accumulator-based instruction set (33 instructions). The *W register*
+is the accumulator. The *Program Counter* (PC) and two *Stack registers* allow
+two levels of subroutines (this could be easily expanded).
 
-There are many good books and WWW information that detail the 16C57
-architecture and instruction set. Please refer to these for more
-information. One place to start would certinaly be the Microchip site at
-[www.microchip.com](http://www.microchip.com/). Other 3^rd^ party tools
-and several good exist detailing how code can be written for the RISC8
-(e.g. 16C57).
+The RISC8 instruction processing has two stages, opernd *Fetch* (`q1`) and instruction *Execute* (`q4`). In the
+Fetch stage, the Register file is addressed for reading (by a decoded part of
+the instruction) so that operads are ready in the execute stage. The execute
+stage is for instruction execution (e.g. ALU operations) and the Register file
+may be addressed for write, if the instruction result is to end there.
+The core is not really pipelined, meaning that that the `q1` and `q4` stages
+do not overlap; they rather act as mutually exclusive clock enables.
 
-The ALU is very simple and includes the minimal set of 8-bit operations
-(ADD, SUB, OR, AND, XOR, ROTATE, etc.). The Instruction Decoder is a
-purely combinatorial look-up table that supplies key control signals.
-The basic 16C57 I/O Ports exist, but full bi-directional control is not
-automatically available (this could be implemented if truly desired in a
-core).
+Because of the two phases, most instructions take two cycles to complete. Only
+the branch instruction, if the branch is taken, take twice that long (i.e. four
+cycles).
+
+The Register File uses a banking scheme and an Indirect Addressing mode. Both
+reads and writes are synchronous and hence the Register file can be built from
+flip-flops or RAM blocks. As of the current multi-cycle architecture, reads and
+writes never occur at the same time.
+
+The Program memory (PRAM) is a separate memory from the Register File and is outside the
+core. It can be synchronous or asynchronous. A simple PRAM model is available in the verification code.
+Pipelining exists between the core and PRAM, meaning that while one instruction is
+being processed (by the core), the next instruction is read by PRAM. The timing is such that
+the address of a next instruction is avilable (at the core's output) in the `q1` fetch stage.
+The next instruction must be ready in the `q4` execute stage.
+
+
+The *ALU* is very simple and includes the minimal set of 8-bit operations
+(ADD, SUB, OR, AND, XOR, ROTATE, etc.). It is purely combinational.
+
+The *Instruction Decoder* is a purely combinatorial look-up table that supplies key control signals.
+
+The basic 16C57 I/O Ports exist, but full bi-directional control is currently not
+supported. It could be implemented if truly desired in a core. Prsently, Port A is
+the only input port and Port B and Port C are two output ports.
 
 No interrupts are supported in the 16C5X family and are not offered in
-the RISC8. Instructions execute in one cycle with the exception of
-branching instructions requiring 2 cycles (when branches are actually
-taken). An argument often cited for the lack of interrupts is that the
-fast one-cycle execution and bit test instructions allows for very fast
-polling, and therefore reduces the need for interrupts.
+the RISC8. An argument often cited for the lack of interrupts is that the
+fast execution and bit test instructions allows for very fast polling,
+and therefore reduces the need for interrupts. Lack of interrupts also
+simplifies the core's architecture and design.
 
 Little debug is built into the core itself. Off-the-shelf development
 environments offer very good debugging capabilities including integrated
@@ -221,12 +262,12 @@ and waveform viewers allow further debugging with the core. The test.v
 module provides some limited debugging such as printing out changes to
 I/O ports, displaying updates to Register File locations, etc.
 
-Expansion is done through an expansion bus on the main cpu.v module
-interface. The bus provides a basic address, read, write data in and out
-set of signals. The module exp.v shows one simple expansion circuit. If
-several expansion modules must coexist using this bus, then they must
-work out their own muxing scheme to drive expdin into the core. See the
-section on ‘Expansion’ for more details. 
+The RISC8 core provides an *Expansion interface*. It is a simple synchronous
+interface with address, data in and out buses and read and write enable
+signals. The expansion interface may be used as a bus; if several expansion
+modules are to coexist on this bus, then they must work out their own muxing
+scheme to drive `expdin` into the core. See the section on ‘Expansion’ for more
+details. An example expansion circuit is in the `exp.v` file in the verification folder.
 
 4 Compatibility with Microchip 16C57 Devices
 --------------------------------------------
@@ -245,11 +286,11 @@ The following features or characteristic differ:
     | Oscillator               | Has several oscillator   | Only has simple, direct  |
     |                          | options.                 | clock input.             |
     +--------------------------+--------------------------+--------------------------+
-    | Clocking                 | Internally uses a        | One phase clock.         |
-    |                          | 4-phase clock            |                          |
+    | Clocking                 | Internally uses a        | One clock, but 2 stages  |
+    |                          | 4-phase clock            | (like 2-phase clock).    |
     +--------------------------+--------------------------+--------------------------+
-    | Reset                    | The 16C57 uses an active | Simple active HIGH       |
-    |                          | low MRST and a power-up  | reset.                   |
+    | Reset                    | The 16C57 uses an active | Simple active HIGH,      |
+    |                          | low MRST and a power-up  | SYNCHRONOUS reset.       |
     |                          | circuit. Some 16C57s     |                          |
     |                          | have brownout.           |                          |
     +--------------------------+--------------------------+--------------------------+
@@ -282,12 +323,11 @@ The following features or characteristic differ:
     | instruction              |                          | with TIMER0 do anything. |
     +--------------------------+--------------------------+--------------------------+
 
- 
 
 5 Module Hierarchy
 ------------------
 
-The hierarchy is as follows:
+The hierarchy of the provided Verilog code (RTL+verification) is as follows:
 
     test.v                  Testbench. Includes the program ROM. NOT synthesizable.
      +-- cpu.v              Top-level cpu module. Synthesizable.
@@ -337,41 +377,40 @@ statement and synthesized. This is left up to the implementor. The
 testbench utilizes a simple register array and \$readmemh calls load
 this "memory" from the ".rom" file.
 
- 
 
 7 CPU Module
 ------------
 
-The CPU module is the top-level synthesizable module. This is where all
+The CPU module, `cpu.v`, is the top-level RTL module. This is where all
 the special registers are implemented such as the INST, W, STACK1,
 STACK2 and the PC. Program Flow control is implemented here. All the
-internal busses and multiplexors are also implemented here. All I/O
-occurs here. Any special circuitry such as the Timer or custom circuitry
-is implemented in this module.
+internal busses and multiplexors are also implemented here. 
+Any special circuitry such as the Timer or custom circuitry
+is also implemented in this module.
 
-The RISC8 has 3 major ways it changes program flow; 1) a GOTO
+The RISC8 has 3 major ways it changes program flow: 1) a GOTO
 instruction, a 2) CALL subroutine instruction and 3) Conditional SKIP
 instructions.
 
-GOTO instructions encode the destination address in literal field of the
+GOTO instructions encode the destination address in the literal field of the
 instruction. Subroutines are done in hardware using explicit STACK
 registers (versus a software stack and Stack Pointer registers). This is
 partly the result of the Harvard architecture and the strict separation
-of program and data spaces. Skip instructions are conditional and
+of program and data spaces. SKIP instructions are conditional and
 usually involve a bit test on a register.
 
-Whenever a branch is taken, the Fetch/Execute pipeline must be
+Whenever a branch is taken, the Fetch/Execute stages must be
 "stalled". Normally, the next instruction is always being fetched while
 the current instruction is executed. When a branch is taken, then the
 upcoming instruction is actually invalid. The RISC8 rectifies this
 situation by forcing a NOP instruction into the INST register on the
-instruction following a branch. This same trick is done in the core. The
+instruction following a branch. The
 NOP instruction is, conveniently, 0x0000. Forcing a NOP instruction is
 done by simply anding the output of the INST register with zeros
-whenever a branch is detected. The core’s internal SKIP signal is
+whenever a branch is detected. The core’s internal `skip` signal is
 asserted whenever a branch is detected and the NOP is to be forced.
 
-Another artifact of the Fetch/Execute pipeline is the reset vector. The
+Another artifact of the pipelining between CPU and PRAM is the reset vector. The
 reset vector (the first address fetched and executed) is the last
 address in the code space. The PC is loaded, on reset, with the reset
 vector (e.g. 0x1FF) and a NOP is forced as the first instruction. In
@@ -382,34 +421,40 @@ time by asserting the reset input for at least one clk edge.
 8 Memory Interfaces
 -------------------
 
-The interface to program memory is straight-forward in terms of the core
+The interface to program memory is straightforward in terms of the core
 itself. An 11-bit address is output and a 12-bit data input is expected.
-This read is synchronous. The program memory (PRAM) itself is modeled in
-pram.v which is a very simple synchronous ram model. The PRAM is outside
-the core (inside test.v but outside cpu.v).
+This read is synchronous. A very simple synchronous model of the program
+memory (PRAM) is in `pram.v`. The PRAM is not part of the RISC8 core.
 
 The Register File interface is a synchronous interface with clk and
 reset inputs. Addressing inputs include a 2-bit **bank** and 5-bit
 **location** input. **Read** and **write** enable signals are inputs and
 there are two separate 8-bit data busses for input and output. The
-regs.v module performs the address logic where some words are mirrored
-into a common set of addresses. Beneath regs.v is the actual synchronous
-RAM model in dram.v. This module is similar to pram.v and is a simple
-synchronous RAM model.
+`regs.v` module performs the address logic where some words are mirrored
+into a common set of addresses.
+
+Beneath `regs.v` is the actual synchronous RAM model in `dram.v`. The
+module provided with the core would likely synthesize into flip-flops.
+To use a true SRAM, the module needs to be replaced with a wrapper around
+a technology IP (ASIC, FPGA) or recoded so that the synthesis tool
+infers the memory IP automatically (FPGA).
 
 9 ALU
 -----
 
-The ALU is implemented in the alu.v file. The ALU is purely
-combinatorial. It has 2 8-bit data inputs, A and B as well as a
+The ALU is implemented in the `alu.v` file and it is purely
+combinational. It has two 8-bit data inputs, A and B as well as a
 single-bit CON Carry in input. A 4-bit operand input selects the ALU
 operation. It has an 8-bit data output and a single-bit carry output and
-also a single-bit zero output. The ALU does not select the appropriate
+also a single-bit zero output.
+
+The ALU does not select the appropriate
 source for its inputs nor does it decide when status flags are updated.
-This is done at the higher level by the Instruction Decoder and the CPU
+This is done at the higher level by the Instruction Decoder and the CPU top
 module.
 
 The ALU supports the following operands.
+Note that an Add with carry instruction is absent. All RISC8 instructions must use this basic set of supported operations.
 
     +--------------------------+--------------------------+--------------------------+
     | ALU Operand Select Code  | Operation                | Description              |
@@ -437,44 +482,37 @@ The ALU supports the following operands.
     | 0111                     | SWAP                     | {A[3:0], A[7:4]}         |
     +--------------------------+--------------------------+--------------------------+
 
-Figure 4.1 ALU Operations
-
-Note that an Add with carry instruction is absent. All RISC8
-instructions must use this basic set of supported operations.
 
 10 Instruction Decoder
 ----------------------
 
-Instruction Decoding is implemented in the dec.v Verilog module. It is
-purely combinatorial. It is specifically implemented as a large Verilog
-**casex** statement; one or two case clauses per instruction (many
+Instruction Decoding is implemented in the `dec.v` module. It is
+purely combinational. It is specifically implemented as a large Verilog
+`casex` statement; one or two case clauses per instruction (many
 instructions are broken into the d=0 and d=1 cases). Its outputs is a
 set of decodes used for various control purposes described below.
 
-An instruction begins to be executed once it is registered into the INST
-register. This occurs every cycle, except when a branch is taken (more
+An instruction begins to be processed once it is registered into the INST
+register. This occurs every `q4` cycle, except when a branch is taken (more
 on this later). The RISC8 has 33 instructions. The Instruction in the
 INST register is 12-bits wide. Several fields are frequently defined in
 instructions, including the F, K and B fields. These subfields are
 created in the core from the original 12 INST register bits. The
-Instruction Set summary figure from the 16C57 data sheet follows for
-reference:
-
- 
+instruction set summary from the 16C57 data sheet appears in ... ***TBD***
 
 Each instruction implies a particular set of control signals for
 controlling, ALU source inputs, PC updating, Status register write
-enables, Register File addresses, etc. These control signals are encoded
-in one place in the module, idec.v. This module produces 15 control
-outputs.
+enables, Register File addresses, etc. The Instruction Decoder is
+where these control signals get decoded from the instruction. The
+result is 15 control outputs.
 
 The Instruction Decoder controls what goes into the ALU and what
 operation the ALU performs. The ALU has two input ports; A and B. The A
 and B inputs are in turn driven by multiplexors which select from either
 W, SBUS, K or the BD vector for ALUA, or from W, SBUS, K or the literal
 00000001. Almost all data that will be written back to the register file
-goes through the ALU. Frequently, particular ALU operations all the
-transfer of data. Use these ALU "tricks" allows us to minimize the
+goes through the ALU, even if no ALU operation is really needed.
+Use of these ALU "tricks" allows us to minimize the
 number of buses in the design. For example, to clear a register, the W
 register is XORed with itself in order to obtain 00000000. Likewise,
 another trick is to OR data with itself in order to simply "copy" the
@@ -483,9 +521,9 @@ data through the ALU.
 Status flags such as the Z and C bits (Zero and Carry out) are updated
 depending on the instruction. For each instruction, an enable signal
 must be generated. Likewise, enables for writing to the W and the
-Register File must be generated. Table 5.1 specifies all the Instruction
+Register File must be generated. The following table specifies all the Instruction
 Decoder control signals per instruction. This table is similarly
-implemented the Instruction Decoder module (idec.v).
+implemented the Instruction Decoder module.
 
     +---------+---------+---------+---------+---------+---------+---------+---------+---------+---------+
     | Instruc | ALU A   | ALU B   | ALU     | Output  | WWE     | FWE     | ZWE     | CWE     | BDPOL   |
@@ -647,7 +685,6 @@ implemented the Instruction Decoder module (idec.v).
     | XORLW   | W       | K       | XOR     | K \^ W  | 1       | 0       | 1       | 0       | 0       |
     +---------+---------+---------+---------+---------+---------+---------+---------+---------+---------+
 
-Instruction Decoder table look-up
 
 11 Register File
 ----------------
