@@ -222,9 +222,141 @@ may be addressed for write, if the instruction result is to end there.
 The core is not really pipelined, meaning that that the `q1` and `q4` stages
 do not overlap; they rather act as mutually exclusive clock enables.
 
+![Waveform of register file addressing](img/reg_file_addressing.png)
+<!-- # Register file addressing (timing-gen source, https://sourceforge.net/projects/timing-gen/)
+%Conf = ( 
+   cycles => 9, 
+   right_x => 6000, 
+   slew   => 5, 
+   slew_offset   => 2, 
+   font => 16, # Helvetica 
+   name_font => 16, # Helvetica 
+  ); 
+ 
+@Waves = ( 
+{ type  => clock,
+name  => clk
+},
+
+{ type => bit, 
+name => 'q1', 
+change => [[0,1], [1,0], [2,1], [3,0], [4,1], [5,0], [6,1], [7,0], [8,1] ]
+}, 
+ 
+{ type => bit, 
+name => 'q4',
+change => [[0,0], [1,1], [2,0], [3,1], [4,0], [5,1], [6,0], [7,1], [8,0] ]
+}, 
+
+{ type  => bus,
+name  => 'inst',
+change => [ [0,'movlw 0xFD'], [2,'movwf 0x0A'], [4,'incf 0x0A'],  [6,'movf 0x0A'], [8,'-'] ],
+},
+
+{ type  => bit,
+name  => 'regfilere',
+change => [ [0,0], [4,1], [5,0],  [6,1], [7,0] ],
+},
+
+{ type  => bit,
+name  => 'regfilewe',
+change => [ [0,0], [3,1], [4,0],  [5,1], [6,0] ],
+},
+
+{ type  => bus,
+name  => 'fileaddr',
+change => [ [0,'-'], [2,'0x0A'], [8,'-'] ],
+},
+
+{ type  => bus,
+name  => 'regfilein',
+change => [ [0,'-'], [3,'0xFD'], [4,'-'],  [5,'0xFE'], [7,'-'] ],
+},
+
+{ type  => bus,
+name  => 'regfileout',
+change => [ [0,'-'], [5,'0xFD'], [7,'0xFE'] ],
+},
+
+{type   => 'bar',
+conf   => {line_style => 1, color=>44},
+point  => [0..16],
+},
+
+); 
+1;
+-->
+
 Because of the two phases, most instructions take two cycles to complete. Only
 the branch instruction, if the branch is taken, take twice that long (i.e. four
 cycles).
+
+![Waveform showing PC and instruction reister during branch taking](img/branch_taken.png)
+<!-- # Branch taken (timing-gen source, https://sourceforge.net/projects/timing-gen/)
+%Conf = ( 
+   cycles => 7, 
+   right_x => 6000, 
+   slew   => 5, 
+   slew_offset   => 2, 
+   font => 16, # Helvetica 
+   name_font => 16, # Helvetica 
+  ); 
+ 
+@Waves = ( 
+{ type  => clock,
+name  => clk
+},
+
+{ type => bus, 
+name => 'phase', 
+change => [[0,'q1'], [1,'q4'], [2,'q1'], [3,'q4'], [4,'q1'], [5,'q4'], [6,'q1'], [7,'q4'] ]
+}, 
+
+{ type  => bus,
+name  => 'pc',
+change => [ [0,'n'], [2,'n+1'], [4,'m'],  [6,'m+1'] ],
+},
+
+{ type  => bus,
+name  => 'pc_in',
+change => [ [0,'n+1'], [2,'m'], [4,'m+1'],  [6,'m+2'] ],
+},
+
+{ type  => bus,
+name  => 'paddr',
+change => [ [0,'n'], [2,'n+1'], [4,'m'],  [6,'m+1'] ],
+},
+
+{ type  => bus,
+name  => 'pdata',
+change => [ [0,'-'], [1,'inst(n)'], [3,'inst(n+1)'],  [5,'inst(m)'] ],
+},
+
+{ type  => bus,
+name  => 'inst',
+change => [ [0,'inst(n-1)'], [2,'goto m'], [4,'nop',{color=>4}],  [6,'inst(m)'] ],
+},
+
+{type   => 'bar',
+conf   => {line_style => 1, color=>44},
+point  => [0..16],
+},
+
+{ type => blank,
+conf => {text_y=>-0.4, font=>16, font_size=>8,text_color=>4},
+point => ['nop',5],
+text => 'NOP forced instead of inst(n+1)',
+},
+
+{ type => blank,
+conf => {row_y=>-1,text_y=>-0.4, font=>16, font_size=>8},
+point => ['goto',3],
+text => 'inst(n) = GOTO m',
+},
+ 
+); 
+1;
+-->
 
 The Register File uses a banking scheme and an Indirect Addressing mode. Both
 reads and writes are synchronous and hence the Register file can be built from
@@ -238,6 +370,65 @@ being processed (by the core), the next instruction is read by PRAM. The timing 
 the address of a next instruction is avilable (at the core's output) in the `q1` fetch stage.
 The next instruction must be ready in the `q4` execute stage.
 
+![Instruction processing](img/instr_process.png)
+<!-- # Instruction processing (timing-gen source, https://sourceforge.net/projects/timing-gen/)
+%Conf = ( 
+   cycles => 7, 
+   right_x => 6000, 
+   slew   => 5, 
+   slew_offset   => 2, 
+   font => 16, # Helvetica 
+   name_font => 16, # Helvetica 
+  ); 
+ 
+@Waves = ( 
+{ type  => clock,
+name  => clk
+},
+
+{ type => bit, 
+name => 'q1', 
+change => [[0,1], [1,0], [2,1], [3,0], [4,1], [5,0], [6,1], [7,0] ]
+}, 
+ 
+{ type => bit, 
+name => 'q4',
+change => [[0,0], [1,1], [2,0], [3,1], [4,0], [5,1], [6,0], [7,1] ]
+}, 
+
+{ type  => bus,
+name  => 'pc',
+change => [ [0,'n'], [2,'n+1'], [4,'n+2'],  [6,'n+3'] ],
+},
+
+{ type  => bus,
+name  => 'pc_in',
+change => [ [0,'n+1'], [2,'n+2'], [4,'n+3'],  [6,'n+4'] ],
+},
+
+{ type  => bus,
+name  => 'paddr',
+change => [ [0,'n'], [2,'n+1'], [4,'n+2'],  [6,'n+3'] ],
+},
+
+{ type  => bus,
+name  => 'pdata',
+change => [ [0,'-'], [1,'inst(n)'], [3,'inst(n+1)'],  [5,'inst(n+2)'] ],
+},
+
+{ type  => bus,
+name  => 'inst',
+change => [ [0,'inst(n-1)'], [2,'inst(n)'], [4,'inst(n+1)'],  [6,'inst(n+2)'] ],
+},
+
+{type   => 'bar',
+conf   => {line_style => 1, color=>44},
+point  => [0..16],
+},
+
+); 
+1; 
+-->
 
 The *ALU* is very simple and includes the minimal set of 8-bit operations
 (ADD, SUB, OR, AND, XOR, ROTATE, etc.). It is purely combinational.
